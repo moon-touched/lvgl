@@ -397,30 +397,74 @@ static void indev_keypad_proc(lv_indev_t * i, lv_indev_data_t * data)
 
         /*Simulate a press on the object if ENTER was pressed*/
         if(data->key == LV_KEY_ENTER) {
+#if LV_USE_EDIT_MODE_FOR_KEYPAD
+            bool editable = false;
+            indev_obj_act->signal_cb(indev_obj_act, LV_SIGNAL_GET_EDITABLE, &editable);
+
+            i->proc.pr_timestamp = lv_tick_get();
+            if(lv_group_get_editing(g) || !editable) {
+                indev_obj_act->signal_cb(indev_obj_act, LV_SIGNAL_PRESSED, NULL);
+                if(indev_reset_check(&i->proc)) return;
+
+                lv_event_send(indev_obj_act, LV_EVENT_PRESSED, NULL);
+                if(indev_reset_check(&i->proc)) return;
+            } else if(editable && !lv_ll_is_empty(&g->obj_ll)) {
+                lv_group_set_editing(g, true);
+            }
+#else
             /*Send the ENTER as a normal KEY*/
             lv_group_send_data(g, LV_KEY_ENTER);
 
             indev_obj_act->signal_cb(indev_obj_act, LV_SIGNAL_PRESSED, NULL);
             if(indev_reset_check(&i->proc)) return;
             lv_event_send(indev_obj_act, LV_EVENT_PRESSED, NULL);
+#endif
             if(indev_reset_check(&i->proc)) return;
         } else if(data->key == LV_KEY_ESC) {
+#if LV_USE_EDIT_MODE_FOR_KEYPAD
+            if(lv_group_get_editing(g)) {
+                lv_group_set_editing(g, false);
+            } else {
+                /*Send the ESC as a normal KEY*/
+                lv_group_send_data(g, LV_KEY_ESC);
+
+                lv_event_send(indev_obj_act, LV_EVENT_CANCEL, NULL);
+                if(indev_reset_check(&i->proc)) return;
+            }
+#else
             /*Send the ESC as a normal KEY*/
             lv_group_send_data(g, LV_KEY_ESC);
 
             lv_event_send(indev_obj_act, LV_EVENT_CANCEL, NULL);
             if(indev_reset_check(&i->proc)) return;
+#endif
         }
         /*Move the focus on NEXT*/
         else if(data->key == LV_KEY_NEXT) {
+#if LV_USE_EDIT_MODE_FOR_KEYPAD
+            if(lv_group_get_editing(g)) {
+                lv_group_send_data(g, LV_KEY_RIGHT);
+            } else {
+                lv_group_focus_next(g);
+            }
+#else
             lv_group_set_editing(g, false); /*Editing is not used by KEYPAD is be sure it is disabled*/
             lv_group_focus_next(g);
+#endif
             if(indev_reset_check(&i->proc)) return;
         }
         /*Move the focus on PREV*/
         else if(data->key == LV_KEY_PREV) {
+#if LV_USE_EDIT_MODE_FOR_KEYPAD
+            if(lv_group_get_editing(g)) {
+                lv_group_send_data(g, LV_KEY_LEFT);
+            } else {
+                lv_group_focus_prev(g);
+            }
+#else
             lv_group_set_editing(g, false); /*Editing is not used by KEYPAD is be sure it is disabled*/
             lv_group_focus_prev(g);
+#endif
             if(indev_reset_check(&i->proc)) return;
         }
         /*Just send other keys to the object (e.g. 'A' or `LV_GROUP_KEY_RIGHT`)*/
@@ -456,14 +500,30 @@ static void indev_keypad_proc(lv_indev_t * i, lv_indev_data_t * data)
             }
             /*Move the focus on NEXT again*/
             else if(data->key == LV_KEY_NEXT) {
+#if LV_USE_EDIT_MODE_FOR_KEYPAD
+                if(lv_group_get_editing(g)) {
+                    lv_group_send_data(g, LV_KEY_RIGHT);
+                } else {
+                    lv_group_focus_next(g);
+                }
+#else
                 lv_group_set_editing(g, false); /*Editing is not used by KEYPAD is be sure it is disabled*/
                 lv_group_focus_next(g);
+#endif
                 if(indev_reset_check(&i->proc)) return;
             }
             /*Move the focus on PREV again*/
             else if(data->key == LV_KEY_PREV) {
+#if LV_USE_EDIT_MODE_FOR_KEYPAD
+                if(lv_group_get_editing(g)) {
+                    lv_group_send_data(g, LV_KEY_LEFT);
+                } else {
+                    lv_group_focus_prev(g);
+                }
+#else
                 lv_group_set_editing(g, false); /*Editing is not used by KEYPAD is be sure it is disabled*/
                 lv_group_focus_prev(g);
+#endif
                 if(indev_reset_check(&i->proc)) return;
             }
             /*Just send other keys again to the object (e.g. 'A' or `LV_GORUP_KEY_RIGHT)*/
@@ -478,6 +538,40 @@ static void indev_keypad_proc(lv_indev_t * i, lv_indev_data_t * data)
         /*The user might clear the key when it was released. Always release the pressed key*/
         data->key = prev_key;
         if(data->key == LV_KEY_ENTER) {
+#if LV_USE_EDIT_MODE_FOR_KEYPAD
+            bool editable = false;
+            indev_obj_act->signal_cb(indev_obj_act, LV_SIGNAL_GET_EDITABLE, &editable);
+
+            if(!editable) {
+                indev_obj_act->signal_cb(indev_obj_act, LV_SIGNAL_RELEASED, NULL);
+                if(indev_reset_check(&i->proc)) return;
+
+                if(i->proc.long_pr_sent == 0) {
+                    lv_event_send(indev_obj_act, LV_EVENT_SHORT_CLICKED, NULL);
+                    if(indev_reset_check(&i->proc)) return;
+                }
+
+                lv_event_send(indev_obj_act, LV_EVENT_CLICKED, NULL);
+                if(indev_reset_check(&i->proc)) return;
+
+                lv_event_send(indev_obj_act, LV_EVENT_RELEASED, NULL);
+                if(indev_reset_check(&i->proc)) return;
+            } else if(g->editing && !i->proc.long_pr_sent || lv_ll_is_empty(&g->obj_ll)) {
+                indev_obj_act->signal_cb(indev_obj_act, LV_SIGNAL_RELEASED, NULL);
+                if(indev_reset_check(&i->proc)) return;
+
+                lv_event_send(indev_obj_act, LV_EVENT_SHORT_CLICKED, NULL);
+                if(indev_reset_check(&i->proc)) return;
+
+                lv_event_send(indev_obj_act, LV_EVENT_CLICKED, NULL);
+                if(indev_reset_check(&i->proc)) return;
+
+                lv_event_send(indev_obj_act, LV_EVENT_RELEASED, NULL);
+                if(indev_reset_check(&i->proc)) return;
+
+                lv_group_send_data(g, LV_KEY_ENTER);
+            }
+#else
 
             indev_obj_act->signal_cb(indev_obj_act, LV_SIGNAL_RELEASED, NULL);
             if(indev_reset_check(&i->proc)) return;
@@ -492,6 +586,7 @@ static void indev_keypad_proc(lv_indev_t * i, lv_indev_data_t * data)
 
             lv_event_send(indev_obj_act, LV_EVENT_RELEASED, NULL);
             if(indev_reset_check(&i->proc)) return;
+#endif
         }
         i->proc.pr_timestamp = 0;
         i->proc.long_pr_sent = 0;
@@ -686,7 +781,7 @@ static void indev_proc_press(lv_indev_proc_t * proc)
 
     if(proc->wait_until_release != 0) return;
 
-    lv_disp_t * disp = indev_act->driver.disp;
+    lv_disp_t * disp      = indev_act->driver.disp;
     bool new_obj_searched = false;
 
     /*If there is no last object then search*/
@@ -729,7 +824,6 @@ static void indev_proc_press(lv_indev_proc_t * proc)
             if(indev_reset_check(proc)) return;
             lv_event_send(last_obj, LV_EVENT_PRESS_LOST, NULL);
             if(indev_reset_check(proc)) return;
-
         }
 
         proc->types.pointer.act_obj  = indev_obj_act; /*Save the pressed object*/
@@ -1120,7 +1214,7 @@ static void indev_drag(lv_indev_proc_t * state)
 
             /*If the object didn't moved then clear the invalidated areas*/
             if(drag_obj->coords.x1 == prev_x && drag_obj->coords.y1 == prev_y) {
-//                state->types.pointer.drag_in_prog = 0;
+                //                state->types.pointer.drag_in_prog = 0;
                 /*In a special case if the object is moved on a page and
                  * the scrollable has fit == true and the object is dragged of the page then
                  * while its coordinate is not changing only the parent's size is reduced */

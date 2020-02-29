@@ -196,6 +196,10 @@
 #if LV_USE_GROUP
 #endif  /*LV_USE_GROUP*/
 
+#ifndef LV_USE_EDIT_MODE_FOR_KEYPAD
+#define LV_USE_EDIT_MODE_FOR_KEYPAD 0
+#endif
+
 /* 1: Enable GPU interface*/
 #ifndef LV_USE_GPU
 #define LV_USE_GPU              1
