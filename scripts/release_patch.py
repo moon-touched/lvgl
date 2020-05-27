@@ -64,7 +64,7 @@ def lvgl_update_version():
 	 
 	f.close()
 
-	f = open("./src/lv_version", "w")
+	f = open("./src/lv_version.h", "w")
 		  
 	f.write(outbuf)
 	f.close()
@@ -186,4 +186,3 @@ docs_build()
 docs_commit_push(ver_str)
 
 clean_up()
-    
